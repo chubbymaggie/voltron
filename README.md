@@ -1,229 +1,160 @@
-voltron
+Voltron
 =======
 
-A half-arsed UI module for GDB & LLDB.
---------------------------------------
+Voltron is an extensible debugger UI toolkit written in Python. It aims to improve the user experience of various debuggers (LLDB, GDB, VDB and WinDbg) by enabling the attachment of utility views that can retrieve and display data from the debugger host. By running these views in other TTYs, you can build a customised debugger user interface to suit your needs.
 
-Voltron is an unobtrusive debugger UI for hackers. It allows you to attach utility views running in other terminals to your debugger, displaying helpful information such as disassembly, stack contents, register values, etc, while still giving you the same GDB or LLDB CLI you're used to. You can still have your pimped out custom prompt, macros, terminal colour scheme - whatever you're used to - but you get the added bonus of a sweet customisable heads-up display.
+Voltron does not aim to be everything to everyone. It's not a wholesale replacement for your debugger's CLI. Rather, it aims to complement your existing setup and allow you to extend your CLI debugger as much or as little as you like. If you just want a view of the register contents in a window alongside your debugger, you can do that. If you want to go all out and have something that looks more like OllyDbg, you can do that too.
 
-This was designed primarily for tasks where source code isn't available and you want a view of the disassembly and registers at all times (e.g. reverse engineering, exploit development, other hackery).
+Built-in views are provided for:
 
-By the way, it's basically held together by sticky tape.
+- Registers
+- Disassembly
+- Stack
+- Memory
+- Breakpoints
+- Backtrace
 
-[![voltron example](http://ho.ax/voltron.png)](#example)
+The author's setup looks something like this:
 
-I've taken a lot of inspiration from the way fG!'s `gdbinit` renders the registers, flags, jump info etc. So big thanks to him for all the hard work he's done on that over the years.
+![voltron example LLDB](http://i.imgur.com/p3XcagJ.png)
+
+Any debugger command can be split off into a view:
+
+![command views](http://i.imgur.com/iatgsgN.png)
+
+More screenshots are [here](https://github.com/snare/voltron/wiki/Screenshots).
 
 Support
 -------
 
-`voltron` supports GDB version 7, LLDB, and has limited support for GDB version 6.
+`voltron` supports LLDB, GDB, VDB and WinDbg/CDB (via [PyKD](https://pykd.codeplex.com/)) and runs on OS X, Linux and Windows.
+
+WinDbg support is new, please [open an issue](https://github.com/snare/voltron/issues) if you have problems.
 
 The following architectures are supported:
-* x86
-* x86_64
-* armv7s
-* arm64
 
-arm64 support is LLDB-only at this stage.
+|         | lldb | gdb | vdb | windbg |
+|---------|------|-----|-----|--------|
+| x86     | ✓    | ✓   | ✓   | ✓      |
+| x86_64  | ✓    | ✓   | ✓   | ✓      |
+| arm     | ✓    | ✓   | ✓   | ✗      |
+| arm64   | ✓    | ✗   | ✗   | ✗      |
+| powerpc | ✗    | ✓   | ✗   | ✗      |
 
 Installation
 ------------
 
-A standard python setup script is included.
+Releases are on PyPI. Install with `pip`:
 
-    # python setup.py install
+    $ pip install voltron
 
-This will install the `voltron` egg wherever that happens on your system, and an executable named `voltron` to `/usr/local/bin/`.
+If you want to be bleeding edge, clone this repo and install with `setup.py`:
 
-`voltron console` requires the `rl` Python module. Install it with:
+    $ python setup.py install
 
-    $ pip install rl
-
-Configuration
--------------
-
-A sample configuration file is included in the repo. Copy it to `~/.voltron/config` and mess with it and you should get the idea. Header and footer positions, visbility and colours are configurable along with other view-specific items (e.g. colours for labels and values in the register view).
-
-In the example config at the top level, the `all_views` section sets up a base configuration to apply to all views. Each view can be configured individually overriding these settings. For example, the `stack_view` section in the example config overrides a number of these settings to reposition the title and info labels. The `register_view` section in the example config contains some settings overriding the default colours for the register view. Have a look at the source for other items in `format_defaults` that can be overridden in this section of the config.
-
-There is also support for named view configurations for each type. The example configuration contains a config section called `some_named_stack_view`, which is a modified version of the example stack view configuration. If you specify this name with the `-n` option, this named configuration will be added to the existing config for that view type:
-
-    $ voltron stack -n "some_named_stack_view"
-
-Some options specified in the configuration file can also be overridden by command line arguments. At this stage, just the show/hide header/footer options.
-
-So the resulting order of precedence for view configuration is:
-
-1. defaults in defaults.cfg
-2. "all_views" config
-3. view-specific config
-4. named view config
-5. command line args
-
-Each configuration level is added to the previous level, and only the options specified in this level override the previous level.
-
-Help
-----
-
-`voltron` uses the `argparse` module with subcommands, so the command line interface should be relatively familiar. Top-level help, including a list of available subcommands, will be output with `-h`. Detailed help for subcommands can be obtained the same way:
-
-    $ voltron -h
-    $ voltron view -h
-    $ voltron view reg -h
-
-Usage - GDBv7
--------------
-
-1. Add `voltron` to your `.gdbinit`. The full path will be inside the `voltron` egg. For example, on OS X it might be */Library/Python/2.7/site-packages/voltron-0.1-py2.7.egg/dbgentry.py*. Add the following lines to your `.gdbinit` to load voltron and install its hooks:
-
-        source /path/to/voltron/dbgentry.py
-        voltron start
-
-2. Fire up the debugger:
-
-        $ gdb file_to_debug
-
-3. In another terminal (I use iTerm panes) start one of the UI views
-
-        $ voltron view reg -v
-        $ voltron view stack
-        $ voltron view disasm
-        $ voltron view bt
-        $ voltron view cmd 'x/32x $rip'
-
-4. Set a breakpoint and run your inferior. Once the inferior has started, the views will be able to connect, but they won't update until the debugger hits the first breakpoint.
-
-        gdb$ b main
-        gdb$ run
-
-5. The debugger should hit the breakpoint and the `voltron` views will be updated. A forced update can be triggered with the following command:
-
-        gdb$ voltron update
-
-
-Usage - GDBv6
--------------
-
-**Note:** `voltron` only has limited support for GDBv6 as it's tough to get useful data out of GDB without the Python API. A set of GDB macros are included to interact with `voltron` (which in this case runs as a background process started by the `voltron_start` macro). Only the register and stack views are supported.
-
-A `hook-stop` macro is included - if you have your own custom one (e.g. fG!'s) you should just add `voltron_update` to your own and comment out the one in `voltron.gdb`.
-
-The macro file will be inside the `voltron` egg. For example, on OS X it might be */Library/Python/2.7/site-packages/voltron-0.1-py2.7.egg/voltron.gdb*.
-
-1. Add the following to your `.gdbinit` to source the `voltron` macros into GDB, and start the `voltron` server process on every GDB launch.
-
-        source /path/to/voltron.gdb
-        voltron_start
-
-2. Fire up the debugger
-
-        $ gdb file_to_debug
-
-3. In another terminal (I use iTerm panes) start one of the UI views
-
-        $ voltron view reg -v
-        $ voltron view stack
-
-4. The UI view code will attach to the server (via a domain socket) and refresh every time the debugger is stopped. So, set a break point and let the debugger hit it and everything should be updated. A forced update can be triggered with the following command:
-
-        gdb$ voltron_update
-
-5. Before you exit the debugger, execute the following command the server process will be left running in the background.
-
-        gdb$ voltron_stop
-
-Usage - LLDB
--------------
-
-1. Load `voltron` into your debugger (this could go in your `.lldbinit`). The full path will be inside the `voltron` egg. For example, on OS X it might be */Library/Python/2.7/site-packages/voltron-0.1-py2.7.egg/dbgentry.py*.
-
-        command script import /path/to/voltron/dbgentry.py
-
-2. Fire up the debugger and start the `voltron` server thread. Unfortunately, this cannot be done from `.lldbinit` as it can with `.gdbinit` as a target must be loaded before `voltron`'s hooks can be installed. Hopefully this will be remedied with a more versatile hooking mechanism in a future version of LLDB (this has been discussed with the developers).
-
-        $ lldb file_to_debug
-        (lldb) voltron start
-
-3. In another terminal (I use iTerm panes) start one of the UI views
-
-        $ voltron view reg -v
-        $ voltron view stack
-        $ voltron view disasm
-        $ voltron view bt
-        $ voltron view cmd 'reg read'
-
-4. Set a breakpoint and run your inferior. Once the inferior has started, the views will be able to connect, but they won't update until the debugger hits the first breakpoint.
-
-        (lldb) b main
-        (lldb) run
-
-5. The debugger should hit the breakpoint and the `voltron` views will be updated. A forced update can be triggered with the following command:
-
-        (lldb) voltron update
-
-LLDB console
-------------
-
-`voltron` also provides a console built on top of LLDB. At this stage it is fairly experimental and quite sparse in features, but it supports all LLDB commands by passing them through to the underlying LLDB core. Currently the only real benefit gained from using this over the standard LLDB CLI is that you don't need to `voltron start` after loading binaries, but it will provide a more flexible and extensible platform on which to build than the stock LLDB (at least until LLDB implements more a useful notification API for loaded python modules). Also you can have a way prettier prompt.
-
-The console is launched like this:
-
-    $ voltron console
-
-My console looks like this:
-
-[![voltron console example](http://i.imgur.com/03GRqSo.png)](#consoleexample)
-
-With this configuration:
-
-[![console config](http://i.imgur.com/AV3Me2u.png)](#consoleconfig)
-
-To use the console you'll need the LLDB python module in your `PYTHONPATH` environment variable. On OS X with the LLDB that comes with Xcode, this would be:
-
-    PYTHONPATH=/Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Resources/Python
-
-Layout automation
------------------
-
-### tmux
-
-There's a few tmux scripting tools around - [tmuxinator](https://github.com/aziz/tmuxinator) is one of them. You'll probably need to use the latest repo version (as of July 11, 2013) as the current stable version has a bug that results in narrow panes not being created properly or something. Seems to be resolved in the latest repo version.
-
-Here's a sample **tmuxinator** config for a layout similar to the example screencap that works well on an 11" MacBook Air in fullscreen mode:
-
-    project_name: voltron
-    project_root: .
-    cli_args: -v -2
-    tabs:
-      - madhax:
-          layout: 15a8,169x41,0,0{147x41,0,0[147x13,0,0{81x13,0,0,60,65x13,82,0,61},147x19,0,14,62,147x7,0,34{89x7,0,34,63,57x7,90,34,64}],21x41,148,0,65}
-          panes:
-            - voltron view disasm
-            - voltron view cmd "i b"
-            - gdb
-            - voltron view stack
-            - voltron view bt
-            - voltron view reg
-
-The `layout` option there configures the actual dimensions of the panes. You can generate the layout info like this:
-
-    $ tmux list-windows
-    1: madhax* (6 panes) [169x41] [layout 15a8,169x41,0,0{147x41,0,0[147x13,0,0{81x13,0,0,60,65x13,82,0,61},147x19,0,14,62,147x7,0,34{89x7,0,34,63,57x7,90,34,64}],21x41,148,0,65}] @11 (active)
-
-Bugs
-----
-
-See the issues thing on github.
-
-Development
+Quick Start
 -----------
 
-I initially hacked this together in a night as a "do the bare minimum to make my life better" project, as larger projects of this nature that I start never get finished. I'm continuing development on this in an ad hoc fashion. If you have a feature request feel free to add it as an issue on github, or add it yourself and send a pull request.
+1. If your debugger has an init script (`.lldbinit` for LLDB or `.gdbinit` for GDB) configure it to load Voltron when it starts by sourcing the `entry.py` entry point script. The full path will be inside the `voltron` package. For example, on OS X it might be */Library/Python/2.7/site-packages/voltron/entry.py*. If you don't add this to your init script, you'll need to execute the commands after starting your debugger.
 
-If you want to add a new view type you'll just need to add a new subclass of `TerminalView` (see the others for examples) that registers for updates and renders data for your own message type, and potentially add some code to `VoltronCommand`/`VoltronGDBCommand`/`VoltronLLDBCommand` to grab the necessary data and cram it into an update message.
+    LLDB:
+
+        command script import /path/to/voltron/entry.py
+
+    GDB:
+
+        source /path/to/voltron/entry.py
+        voltron init
+        set disassembly-flavor intel
+
+2. Start your debugger and initialise Voltron manually if necessary.
+
+    On recent versions of LLDB you do not need to initialise Voltron manually:
+
+        $ lldb target_binary
+
+    On older versions of LLDB you need to call `voltron init` after you load the inferior:
+
+        $ lldb target_binary
+        (lldb) voltron init
+
+    GDB:
+
+        $ gdb target_binary
+
+    VDB:
+
+        $ ./vdbbin target_binary
+        > script /path/to/voltron/entry.py
+
+    WinDbg/CDB (requires [PyKD](https://pykd.codeplex.com/)):
+
+        > cdb -c '.load C:\path\to\pykd.pyd ; !py --global C:\path\to\voltron\entry.py' target_binary
+
+3. In another terminal (I use iTerm panes) start one of the UI views. On LLDB and WinDbg the views will update immediately. On GDB and VDB they will not update until the inferior stops (at a breakpoint, after a step, etc):
+
+        $ voltron view register
+        $ voltron view stack
+        $ voltron view disassembly
+        $ voltron view backtrace
+
+4. Set a breakpoint and run your inferior.
+
+        (*db) b main
+        (*db) run
+
+5. When the debugger hits the breakpoint, the views will be updated to reflect the current state of registers, stack, memory, etc. Views are updated after each command is executed in the debugger CLI, using the debugger's "stop hook" mechanism. So each time you step, or continue and hit a breakpoint, the views will update.
+
+Documentation
+-------------
+
+See the [wiki](https://github.com/snare/voltron/wiki) on github.
+
+Bugs and Errata
+---------------
+
+See the [issue tracker](https://github.com/snare/voltron/issues) on github for more information or to submit issues.
+
+### GDB
+
+1. GDB on some distros is built with Python 3, but the system's Python is version 2. If Voltron is installed into Python 2's `site-packages` it will not work with GDB. See [this page on the wiki](https://github.com/snare/voltron/wiki/Voltron-on-Ubuntu-14.04-with-GDB) for installation instructions.
+
+2. There is no clean way to hook GDB's exit, only the inferior's exit, so the Voltron server is started and stopped along with the inferior. This results in views showing "Connection refused" before the inferior has been started.
+
+3. Due to a limitation in the GDB API, the views are only updated each time the debugger is stopped (e.g. by hitting a breakpoint), so view contents are not populated immediately when the view is connected, only when the first breakpoint is hit.
+
+4. If the stack view is causing GDB to hang then it must be launched **after** the debugger has been launched, the inferior started, and the debugger stopped (e.g. a breakpoint hit). This is due to a GDB bug that has not yet been resolved.
+
+### LLDB
+
+On older versions of LLDB, the `voltron init` command must be run manually after loading the debug target, as a target must be loaded before Voltron's hooks can be installed. Voltron will attempt to automatically register its event handler, and it will inform the user if `voltron init` is required.
+
+### WinDbg
+
+More information about WinDbg/CDB support [here](https://github.com/snare/voltron/wiki/WinDbg).
+
+### Misc
+
+1. The authors primarily use Voltron with the most recent version of LLDB on OS X. We will try to test everything on as many platforms and architectures as possible before releases, but LLDB/OS X/x64 is going to be by far the most frequently-used combination. Hopefully Voltron doesn't set your pets on fire, but YMMV.
+
+2. Intel is the only disassembly flavour currently supported for syntax highlighting.
 
 License
 -------
 
-This software is released under the "Buy snare a beer" license. If you use this and don't hate it, buy me a beer at a conference some time. This license also extends to other contributors - richo definitely deserves a few beers for his contributions.
+See the [LICENSE](https://github.com/snare/voltron/blob/master/LICENSE) file.
+
+If you use this and don't hate it, buy me a beer at a conference some time. This license also extends to other contributors - [richo](http://github.com/richo) definitely deserves a few beers for his contributions.
+
+Credits
+-------
+
+Thanks to Azimuth Security for letting me spend time working on this.
+
+Props to [richo](http://github.com/richo) for all his contributions to Voltron.
+
+[fG!](http://github.com/gdbinit)'s gdbinit was the original inspiration for this project.
+
+Thanks to [Willi](http://github.com/williballenthin) for implementing the VDB support.
+
+Voltron now uses [Capstone](http://www.capstone-engine.org) for disassembly as well as the debugger hosts' internal disassembly mechanism. [Capstone](http://www.capstone-engine.org) is a powerful, open source, multi-architecture disassembler upon which the next generation of reverse engineering and debugging tools are being built. Check it out.
